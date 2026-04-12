@@ -14,7 +14,51 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
+// Allow embedding in Google Sites and other trusted domains
+app.use((req, res, next) => {
+  // Clear any default X-Frame-Options
+  res.removeHeader("X-Frame-Options");
+  
+  // Explicitly allow framing from Google Sites and common Google domains
+  res.setHeader(
+    "Content-Security-Policy",
+    "frame-ancestors 'self' https://sites.google.com https://*.google.com https://*.googleusercontent.com https://*.gstatic.com *;"
+  );
+  
+  // Standard CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  
+  // Tell browsers this is a "safe" cross-origin request
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  
+  next();
+});
+
 app.use(express.json());
+
+// Root path logger
+app.get("/", (req, res, next) => {
+  console.log(`[Root Access] ${req.method} ${req.url}`);
+  next();
+});
+
+// API Routes
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Test route for embedding
+app.get("/test-embed", (req, res) => {
+  res.send(`
+    <div style="font-family: sans-serif; padding: 20px; text-align: center;">
+      <h1 style="color: #4f46e5;">Architech Embed Success!</h1>
+      <p>If you can see this, the connection to Google Sites is working.</p>
+      <p>Time: ${new Date().toLocaleTimeString()}</p>
+    </div>
+  `);
+});
 
 // Lazy initialization for OpenAI (OpenRouter)
 let openaiClient: OpenAI | null = null;
@@ -153,6 +197,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
   });
 }
 
