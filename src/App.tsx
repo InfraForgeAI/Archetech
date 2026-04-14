@@ -36,11 +36,37 @@ export default function App() {
   const [lang, setLang] = useState<Language>('en');
   const t = translations[lang];
 
+  // Suppress extension errors (MetaMask, etc.)
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      const msg = event.message || '';
+      if (msg.includes('MetaMask') || msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist')) {
+        event.stopImmediatePropagation();
+        console.warn('Suppressed extension error:', msg);
+      }
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const msg = event.reason?.message || '';
+      if (msg.includes('MetaMask') || msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist')) {
+        event.stopImmediatePropagation();
+        console.warn('Suppressed extension promise rejection:', msg);
+      }
+    };
+
+    window.addEventListener('error', handleError, true);
+    window.addEventListener('unhandledrejection', handleRejection, true);
+    return () => {
+      window.removeEventListener('error', handleError, true);
+      window.removeEventListener('unhandledrejection', handleRejection, true);
+    };
+  }, []);
+
   // Determine API Base URL
   // If we are on Netlify or another domain, we need to point to the AI Studio backend
   const API_BASE = window.location.hostname.includes('netlify.app') 
     ? 'https://ais-pre-x5zspkvx3p6l3qnoufolsi-125935498137.europe-west1.run.app'
-    : '';
+    : window.location.hostname.includes('run.app') ? '' : '';
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +77,7 @@ export default function App() {
   const [showSql, setShowSql] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [health, setHealth] = useState<any>(null);
 
   // Cost Estimator State
   const [users, setUsers] = useState(1000);
@@ -64,6 +91,13 @@ export default function App() {
   });
 
   const loadingMessages = t.loadingMessages;
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/health`)
+      .then(res => res.json())
+      .then(setHealth)
+      .catch(err => console.error("Health check failed:", err));
+  }, [API_BASE]);
 
   useEffect(() => {
     if (loading) {
@@ -85,6 +119,7 @@ export default function App() {
     setAiCost(null);
     setSaveStatus('idle');
     try {
+      console.log(`Attempting to generate blueprint via: ${API_BASE}/api/generate-blueprint`);
       const response = await fetch(`${API_BASE}/api/generate-blueprint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +127,14 @@ export default function App() {
       });
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+        const errorText = await response.text();
+        console.error("Server Error Response:", errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { error: errorText };
+        }
         throw new Error(errorData.error || `Server returned ${response.status}`);
       }
 
@@ -167,6 +209,17 @@ export default function App() {
         style={{ scaleX: scrollYProgress }}
       />
 
+      {/* Health Warning */}
+      {health && (!health.config.hasOpenRouterKey || !health.config.hasSupabaseUrl) && (
+        <div className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest py-2 px-6 flex items-center justify-between sticky top-0 z-[60]">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-3 h-3" />
+            <span>Missing Configuration: {!health.config.hasOpenRouterKey && 'OpenRouter API Key'} {!health.config.hasSupabaseUrl && 'Supabase URL'}</span>
+          </div>
+          <a href="/api/health" target="_blank" className="underline hover:no-underline">Check Status</a>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-black bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -187,10 +240,10 @@ export default function App() {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setLang(lang === 'en' ? 'mk' : 'en')}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-black text-[10px] font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
+              className="flex items-center gap-2 px-4 py-2 bg-black text-white border border-black text-[10px] font-bold uppercase tracking-widest hover:bg-gray-800 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,0.1)] active:shadow-none active:translate-x-[2px] active:translate-y-[2px]"
             >
               <Languages className="w-4 h-4" />
-              {lang === 'en' ? 'MK' : 'EN'}
+              {t.translate}: {lang === 'en' ? 'MK' : 'EN'}
             </button>
 
             <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-none border border-black/5">

@@ -45,6 +45,7 @@ export const translations = {
     documentation: "Documentation",
     supabaseIntegration: "Supabase Integration",
     openRouterApi: "OpenRouter API",
+    translate: "Translate",
     loadingMessages: [
       "Surveying the site...",
       "Drafting the foundation...",
@@ -100,6 +101,7 @@ export const translations = {
     documentation: "Документација",
     supabaseIntegration: "Supabase Интеграција",
     openRouterApi: "OpenRouter API",
+    translate: "Преведи",
     loadingMessages: [
       "Истражување на локацијата...",
       "Проектирање на темелите...",
