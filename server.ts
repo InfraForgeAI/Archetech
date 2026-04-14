@@ -46,7 +46,15 @@ app.get("/", (req, res, next) => {
 
 // API Routes
 app.get("/api/health", (req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({ 
+    status: "ok", 
+    timestamp: new Date().toISOString(),
+    config: {
+      hasOpenRouterKey: !!process.env.OPENROUTER_API_KEY,
+      hasSupabaseUrl: !!process.env.SUPABASE_URL,
+      hasSupabaseKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    }
+  });
 });
 
 // Test route for embedding
@@ -102,7 +110,7 @@ function getSupabase() {
 
 // API Routes
 app.post("/api/generate-blueprint", async (req, res) => {
-  const { input } = req.body;
+  const { input, lang = 'en' } = req.body;
 
   if (!input) {
     return res.status(400).json({ error: "Input is required" });
@@ -118,6 +126,8 @@ app.post("/api/generate-blueprint", async (req, res) => {
           content: `Role: You are the Architech Lead Mentor, an expert Full-Stack Software Architect and Product Manager. Your mission is to help students transition from writing basic code to building scalable, production-ready applications.
 
 Objective: When a student provides an app idea or a Business Model Canvas, you must analyze it and produce a high-level Technical Blueprint.
+
+Language Requirement: You MUST provide the entire response in ${lang === 'mk' ? 'Macedonian (Македонски)' : 'English'}.
 
 Output Requirements:
 Your response must be structured into the following FIVE modules:

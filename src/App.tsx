@@ -18,11 +18,13 @@ import {
   Sparkles,
   ShieldCheck,
   Cpu,
-  Globe
+  Globe,
+  Languages
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { translations, type Language } from './translations';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -31,12 +33,21 @@ function cn(...inputs: ClassValue[]) {
 type Tab = 'mentor' | 'estimator';
 
 export default function App() {
+  const [lang, setLang] = useState<Language>('en');
+  const t = translations[lang];
+
+  // Determine API Base URL
+  // If we are on Netlify or another domain, we need to point to the AI Studio backend
+  const API_BASE = window.location.hostname.includes('netlify.app') 
+    ? 'https://ais-pre-x5zspkvx3p6l3qnoufolsi-125935498137.europe-west1.run.app'
+    : '';
+
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [blueprint, setBlueprint] = useState<string | null>(null);
   const [aiCost, setAiCost] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('mentor');
-  const [loadingMessage, setLoadingMessage] = useState('Surveying the site...');
+  const [loadingMessage, setLoadingMessage] = useState(t.loadingMessages[0]);
   const [showSql, setShowSql] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -52,14 +63,7 @@ export default function App() {
     offset: ["start start", "end end"]
   });
 
-  const loadingMessages = [
-    "Surveying the site...",
-    "Drafting the foundation...",
-    "Selecting structural materials...",
-    "Optimizing the load-bearing logic...",
-    "Reviewing building codes...",
-    "Finalizing the blueprint..."
-  ];
+  const loadingMessages = t.loadingMessages;
 
   useEffect(() => {
     if (loading) {
@@ -70,7 +74,7 @@ export default function App() {
       }, 2500);
       return () => clearInterval(interval);
     }
-  }, [loading]);
+  }, [loading, loadingMessages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,17 +85,25 @@ export default function App() {
     setAiCost(null);
     setSaveStatus('idle');
     try {
-      const response = await fetch('/api/generate-blueprint', {
+      const response = await fetch(`${API_BASE}/api/generate-blueprint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input, lang }),
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
+        throw new Error(errorData.error || `Server returned ${response.status}`);
+      }
+
       const data = await response.json();
-      if (data.error) throw new Error(data.error);
       setBlueprint(data.blueprint);
       setAiCost(data.estimatedCost);
-    } catch (error) {
-      setBlueprint('Error generating blueprint. Please check your connection and try again.');
+    } catch (error: any) {
+      console.error("Generation Error:", error);
+      setBlueprint(lang === 'en' 
+        ? `Error: ${error.message || 'Please check your connection and try again.'}` 
+        : `Грешка: ${error.message || 'Проверете ја врската и обидете се повторно.'}`);
     } finally {
       setLoading(false);
     }
@@ -101,7 +113,7 @@ export default function App() {
     if (!blueprint) return;
     setSaving(true);
     try {
-      const response = await fetch('/api/save-blueprint', {
+      const response = await fetch(`${API_BASE}/api/save-blueprint`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -167,16 +179,25 @@ export default function App() {
               <Building2 className="w-6 h-6 text-white" />
             </div>
             <div className="flex flex-col">
-              <span className="text-2xl font-black tracking-tighter uppercase leading-none">Architech</span>
-              <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Lead Mentor v2.0</span>
+              <span className="text-2xl font-black tracking-tighter uppercase leading-none">{t.title}</span>
+              <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">{t.subtitle}</span>
             </div>
           </motion.div>
 
-          <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-none border border-black/5">
-            {[
-              { id: 'mentor', label: 'Mentor', icon: Compass },
-              { id: 'estimator', label: 'Estimator', icon: Calculator }
-            ].map((tab) => (
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setLang(lang === 'en' ? 'mk' : 'en')}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-black text-[10px] font-bold uppercase tracking-widest hover:bg-gray-50 transition-all"
+            >
+              <Languages className="w-4 h-4" />
+              {lang === 'en' ? 'MK' : 'EN'}
+            </button>
+
+            <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-none border border-black/5">
+              {[
+                { id: 'mentor', label: t.mentor, icon: Compass },
+                { id: 'estimator', label: t.estimator, icon: Calculator }
+              ].map((tab) => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as Tab)}
@@ -198,7 +219,8 @@ export default function App() {
             ))}
           </nav>
         </div>
-      </header>
+      </div>
+    </header>
 
       <main className="max-w-7xl mx-auto w-full px-6 py-16 grid grid-cols-1 lg:grid-cols-12 gap-16">
         {/* Left Column */}
@@ -210,14 +232,14 @@ export default function App() {
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-white text-[10px] font-bold uppercase tracking-[0.2em] mb-6">
               <Sparkles className="w-3 h-3" />
-              AI-Powered Architecture
+              {lang === 'en' ? 'AI-Powered Architecture' : 'AI-Архитектура'}
             </div>
             <h1 className="text-6xl font-black tracking-tight leading-[0.9] mb-8">
-              Drafting <br />
-              <span className="text-gray-300 italic font-serif">The Future.</span>
+              {t.drafting} <br />
+              <span className="text-gray-300 italic font-serif">{t.theFuture}</span>
             </h1>
             <p className="text-gray-500 text-sm leading-relaxed max-w-md">
-              Transition from basic code to scalable, production-ready systems. Architech provides the structural integrity your vision deserves.
+              {t.heroText}
             </p>
           </motion.section>
 
@@ -237,13 +259,13 @@ export default function App() {
                       <textarea
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        placeholder="Paste your app idea or Business Model Canvas..."
+                        placeholder={t.placeholder}
                         className="w-full h-80 p-6 bg-white border border-black rounded-none focus:ring-0 focus:border-black resize-none text-sm placeholder:text-gray-300 transition-all font-mono"
                       />
                       <div className="absolute bottom-4 right-4 flex items-center gap-4 text-[10px] font-mono text-gray-400 uppercase">
                         <div className="flex items-center gap-1">
                           <Terminal className="w-3 h-3" />
-                          {input.length} chars
+                          {input.length} {t.chars}
                         </div>
                       </div>
                     </div>
@@ -256,12 +278,12 @@ export default function App() {
                     {loading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        Processing...
+                        {t.processing}
                       </>
                     ) : (
                       <>
                         <Send className="w-4 h-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                        Generate Blueprint
+                        {t.generate}
                       </>
                     )}
                   </button>
@@ -269,8 +291,8 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4">
                   {[
-                    { icon: ShieldCheck, label: 'Secure RLS', sub: 'Supabase Ready' },
-                    { icon: Cpu, label: 'Qwen 2.5', sub: '72B Intelligence' }
+                    { icon: ShieldCheck, label: t.secureRls, sub: t.supabaseReady },
+                    { icon: Cpu, label: t.qwenModel, sub: t.intelligence }
                   ].map((item, i) => (
                     <div key={i} className="p-4 border border-black/5 bg-white/50 flex flex-col gap-1">
                       <item.icon className="w-4 h-4 mb-1" />
@@ -290,14 +312,14 @@ export default function App() {
               >
                 <div className="flex items-center gap-3 mb-4">
                   <Calculator className="w-5 h-5" />
-                  <h2 className="text-xs font-bold uppercase tracking-[0.2em]">Financial Projection</h2>
+                  <h2 className="text-xs font-bold uppercase tracking-[0.2em]">{t.financialProjection}</h2>
                 </div>
                 
                 <div className="space-y-8">
                   {[
-                    { label: 'Initial Users', val: users, set: setUsers, min: 100, max: 10000, step: 100, suffix: '' },
-                    { label: 'Monthly Growth', val: growth, set: setGrowth, min: 0, max: 100, step: 5, suffix: '%' },
-                    { label: 'Projection Period', val: months, set: setMonths, min: 1, max: 24, step: 1, suffix: 'm' }
+                    { label: t.initialUsers, val: users, set: setUsers, min: 100, max: 10000, step: 100, suffix: '' },
+                    { label: t.monthlyGrowth, val: growth, set: setGrowth, min: 0, max: 100, step: 5, suffix: '%' },
+                    { label: t.projectionPeriod, val: months, set: setMonths, min: 1, max: 24, step: 1, suffix: 'm' }
                   ].map((param, i) => (
                     <div key={i} className="space-y-3">
                       <div className="flex justify-between items-end">
@@ -318,7 +340,7 @@ export default function App() {
                     <Globe className="w-4 h-4 text-gray-400" />
                   </div>
                   <p className="text-[10px] text-gray-400 leading-relaxed italic">
-                    *Estimates include infrastructure overhead, database scaling, and AI token consumption based on current prompt complexity.
+                    {t.infrastructureNote}
                   </p>
                 </div>
               </motion.div>
@@ -385,11 +407,11 @@ export default function App() {
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
                         <FileCode className="w-4 h-4" />
-                        {showSql ? 'Database Schema' : 'System Architecture'}
+                        {showSql ? t.databaseSchema : t.systemArchitecture}
                       </div>
                       {aiCost && (
                         <div className="px-2 py-0.5 bg-gray-100 text-[9px] font-mono text-gray-500 uppercase">
-                          Est. Cost: ${aiCost.toFixed(4)}
+                          {t.estCost}: ${aiCost.toFixed(4)}
                         </div>
                       )}
                     </div>
@@ -401,7 +423,7 @@ export default function App() {
                           showSql ? "bg-black text-white" : "hover:bg-gray-50"
                         )}
                       >
-                        {showSql ? 'View Blueprint' : 'View SQL'}
+                        {showSql ? t.viewBlueprint : t.viewSql}
                       </button>
                       <button 
                         onClick={handleSave}
@@ -414,7 +436,7 @@ export default function App() {
                         )}
                       >
                         {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Database className="w-3 h-3" />}
-                        {saveStatus === 'success' ? 'Saved!' : saveStatus === 'error' ? 'Error' : 'Save to Supabase'}
+                        {saveStatus === 'success' ? t.saved : saveStatus === 'error' ? t.error : t.saveSupabase}
                       </button>
                     </div>
                   </div>
@@ -455,7 +477,7 @@ export default function App() {
                   >
                     <Layers className="w-16 h-16 mb-6 opacity-20 group-hover:opacity-40 transition-opacity" />
                   </motion.div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.3em]">Awaiting Input Parameters</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.3em]">{t.awaitingInput}</p>
                 </div>
               )
             ) : (
@@ -467,9 +489,9 @@ export default function App() {
               >
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {[
-                    { icon: Users, label: 'Final Scale', val: costData[costData.length - 1].users.toLocaleString(), sub: 'Active Users' },
-                    { icon: DollarSign, label: 'Monthly Burn', val: `$${costData[costData.length - 1].cost.toLocaleString()}`, sub: 'Infrastructure' },
-                    { icon: TrendingUp, label: 'Growth Factor', val: `${Math.round((costData[costData.length - 1].users / users - 1) * 100)}%`, sub: 'Total Increase' }
+                    { icon: Users, label: t.finalScale, val: costData[costData.length - 1].users.toLocaleString(), sub: t.activeUsers },
+                    { icon: DollarSign, label: t.monthlyBurn, val: `$${costData[costData.length - 1].cost.toLocaleString()}`, sub: t.infrastructure },
+                    { icon: TrendingUp, label: t.growthFactor, val: `${Math.round((costData[costData.length - 1].users / users - 1) * 100)}%`, sub: t.totalIncrease }
                   ].map((stat, i) => (
                     <motion.div 
                       key={i}
@@ -491,17 +513,17 @@ export default function App() {
                 <div className="bg-white border border-black p-10 shadow-[24px_24px_0px_0px_rgba(0,0,0,0.02)]">
                   <div className="flex items-center justify-between mb-12">
                     <div>
-                      <h2 className="text-xl font-black tracking-tight uppercase mb-1">Burn Rate Analysis</h2>
-                      <p className="text-[10px] text-gray-400 uppercase tracking-widest">24-Month Projection</p>
+                      <h2 className="text-xl font-black tracking-tight uppercase mb-1">{t.burnRateAnalysis}</h2>
+                      <p className="text-[10px] text-gray-400 uppercase tracking-widest">{t.monthProjection}</p>
                     </div>
                     <div className="flex items-center gap-6">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-black" />
-                        <span className="text-[9px] font-bold uppercase tracking-widest">Cost</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest">{t.cost}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 bg-gray-200" />
-                        <span className="text-[9px] font-bold uppercase tracking-widest">Users</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest">{t.users}</span>
                       </div>
                     </div>
                   </div>
@@ -512,9 +534,9 @@ export default function App() {
                         <div className="flex items-center justify-between text-[10px] font-mono mb-2 opacity-40 group-hover:opacity-100 transition-opacity">
                           <span className="flex items-center gap-2">
                             <span className="w-4 h-[1px] bg-gray-300" />
-                            Month {d.month}
+                            {t.month} {d.month}
                           </span>
-                          <span className="font-bold">${d.cost} / {d.users.toLocaleString()} users</span>
+                          <span className="font-bold">${d.cost} / {d.users.toLocaleString()} {t.users.toLowerCase()}</span>
                         </div>
                         <div className="h-1.5 bg-gray-50 w-full relative">
                           <motion.div 
@@ -541,9 +563,13 @@ export default function App() {
                   <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
                   <Zap className="w-8 h-8 text-yellow-400 shrink-0" />
                   <div className="relative z-10">
-                    <h3 className="font-black uppercase tracking-[0.2em] text-sm mb-4">Architect's Strategy</h3>
+                    <h3 className="font-black uppercase tracking-[0.2em] text-sm mb-4">{t.architectStrategy}</h3>
                     <p className="text-sm text-gray-400 leading-relaxed font-serif italic">
-                      "At {costData[costData.length - 1].users.toLocaleString()} users, your infrastructure will face significant pressure. Prioritize horizontal scaling, implement Redis for session management, and ensure your Supabase RLS policies are optimized for query performance. The foundation you build today determines the height you can reach tomorrow."
+                      {lang === 'en' ? (
+                        `"At ${costData[costData.length - 1].users.toLocaleString()} users, your infrastructure will face significant pressure. Prioritize horizontal scaling, implement Redis for session management, and ensure your Supabase RLS policies are optimized for query performance. The foundation you build today determines the height you can reach tomorrow."`
+                      ) : (
+                        `"Со ${costData[costData.length - 1].users.toLocaleString()} корисници, вашата инфраструктура ќе се соочи со значителен притисок. Дајте приоритет на хоризонталното скалирање, имплементирајте Redis за управување со сесии и погрижете се вашите Supabase RLS политики да бидат оптимизирани за перформанси. Темелот што го градите денес ја одредува висината што можете да ја достигнете утре."`
+                      )}
                     </p>
                   </div>
                 </motion.div>
@@ -559,17 +585,17 @@ export default function App() {
           <div className="flex flex-col gap-2">
             <div className="flex items-center gap-2">
               <Building2 className="w-4 h-4" />
-              <span className="text-xs font-black uppercase tracking-tighter">Architech Studio</span>
+              <span className="text-xs font-black uppercase tracking-tighter">{t.title} Studio</span>
             </div>
             <div className="text-[9px] font-mono text-gray-400 uppercase tracking-[0.3em]">
-              Drafting the digital infrastructure of tomorrow
+              {t.footerText}
             </div>
           </div>
           <div className="flex items-center gap-12">
             {[
-              { label: 'Documentation', href: '#' },
-              { label: 'Supabase Integration', href: '#' },
-              { label: 'OpenRouter API', href: '#' }
+              { label: t.documentation, href: '#' },
+              { label: t.supabaseIntegration, href: '#' },
+              { label: t.openRouterApi, href: '#' }
             ].map((link, i) => (
               <a key={i} href={link.href} className="text-[9px] font-bold uppercase tracking-widest hover:text-gray-400 transition-colors">
                 {link.label}
